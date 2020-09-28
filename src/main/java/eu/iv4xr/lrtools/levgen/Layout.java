@@ -2,6 +2,7 @@ package eu.iv4xr.lrtools.levgen;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Random;
 import java.util.stream.Collectors;
 
 import eu.iv4xr.lrtools.levgen.Room.Direction;
@@ -432,10 +433,10 @@ public class Layout {
 		// get neigbors which are free and not yet in the path
 		
 		List<Pair<Integer,Integer>> neighbors = new LinkedList<>() ;
-		neighbors.add(new Pair(x+1,y)) ;
-		neighbors.add(new Pair(x-1,y)) ;
-		neighbors.add(new Pair(x,y+1)) ;
-		neighbors.add(new Pair(x,y-1)) ;
+		if (x+1<width)  neighbors.add(new Pair(x+1,y)) ;
+		if (0<=x-1)     neighbors.add(new Pair(x-1,y)) ;
+		if (y+1<height) neighbors.add(new Pair(x,y+1)) ;
+		if (0<=y-1)     neighbors.add(new Pair(x,y-1)) ;
 		
 		neighbors = neighbors.stream()
 		  .filter(P -> !memberOf(pathSofar,P.fst, P.snd) && layout[P.fst][P.snd] == null)
@@ -474,17 +475,40 @@ public class Layout {
 		return false ;
 	}
 	
-	/**
-	 * Minimize the map by removing empty margins.
-	 */
-	public Layout clip() {
+	static List<Pair<Integer,Integer>> shuffle(List<Pair<Integer,Integer>> z) {
+		int N = z.size() ;
+		List<Pair<Integer,Integer>> zz = new LinkedList<>() ;
+		zz.addAll(z) ;
+		z.clear() ;
+		Random rnd = new Random() ;
+		for(int i=0; i<N; i++) {
+			var P = zz.get(rnd.nextInt(zz.size())) ;
+			z.add(P) ;
+			zz.remove(P) ;
+		}
+		return z ;
+	}
+	
+	private Pair<Integer,Integer> bottomleft() {
 		int bottomleft_x = 0 ;
 		int bottomleft_y = 0 ;
 		boolean found = false ;
+		// find left-most column which is occupied:
 		for (int x=0; x<width; x++) {
 			for(int y=0; y<height; y++) {
 				if(layout[x][y] != null) {
 					bottomleft_x = x ;
+					found = true ;
+					break ;
+				}
+			}
+			if (found) break ;
+		}
+		// find lowest row which is occupied:
+		found = false ;
+		for (int y=0; y<height; y++) {
+			for(int x=0; x<width; x++) {
+				if(layout[x][y] != null) {
 					bottomleft_y = y ;
 					found = true ;
 					break ;
@@ -492,14 +516,29 @@ public class Layout {
 			}
 			if (found) break ;
 		}
-		
+		return new Pair(bottomleft_x, bottomleft_y) ;
+	}
+	
+	private Pair<Integer,Integer> topright() {
 		int topright_x = 0 ;
 		int topright_y = 0 ;
-		found = false ;
+		// find rightmost column that is occupied:
+		boolean found = false ;
 		for(int x=width-1 ; 0<=x; x--) {
 			for (int y=height-1; 0<=y; y--) {
 				if (layout[x][y] != null) {
 					topright_x = x ;
+					found = true ;
+					break ;
+				}
+			}
+			if (found) break ;
+		}
+		// find highest row that is occupied:
+		found = false ;
+		for(int y=height-1 ; 0<=y; y--) {
+			for (int x=width-1; 0<=x; x--) {
+				if (layout[x][y] != null) {
 					topright_y = y ;
 					found = true ;
 					break ;
@@ -507,15 +546,41 @@ public class Layout {
 			}
 			if (found) break ;
 		}
+		return new Pair(topright_x,topright_y) ;
+	}
+	
+	/**
+	 * Minimize the map by removing empty margins.
+	 */
+	public Layout clip() {
+		var bl = bottomleft() ;
+		int bottomleft_x = bl.fst ;
+		int bottomleft_y = bl.snd ;
+		var tr = topright() ;
+		int topright_x = tr.fst ;
+		int topright_y = tr.snd ;
 		int width_min  = topright_x - bottomleft_x ;
 		int height_min = topright_y - bottomleft_y ;
-		Layout lz = new Layout(width_min,height_min) ;
-		for(int x=0; x<width_min; x++) {
-			for(int y=0; y<height_min; y++) {
+		Layout lz = new Layout(width_min+1,height_min+1) ;
+		for(int x=0; x<lz.width; x++) {
+			for(int y=0; y<lz.height; y++) {
 				lz.layout[x][y] = layout[x + bottomleft_x][y + bottomleft_y] ;
 			}
 		}
 		return lz ;
+	}
+	
+	/**
+	 * Sometimes we have to place a room which is not connected to any room placed so far.
+	 * This method will find an empty spot for it.
+	 */
+	private Pair<Integer,Integer> findASpot() {
+		var bl = bottomleft() ;
+		var tr = topright() ;
+		int x = tr.fst + 3 ;
+		int h = tr.snd - bl.snd ;
+		int y = bl.snd + h/2 ;
+		return new Pair(x,y) ;
 	}
 	
 	
@@ -529,8 +594,8 @@ public class Layout {
 		int width  = 4*rooms.size() + 1 ;
 		int height = 4*rooms.size() + 1 ;
 		Layout layout = new Layout(width,height) ;
-		int centerX = rooms.size() ;
-		int centerY = rooms.size() ;
+		int centerX = 2*rooms.size() ;
+		int centerY = 2*rooms.size() ;
 		
 		// rooms which are already placed in the Layout
 		List<Room> placedRooms = new LinkedList<>() ;
@@ -540,19 +605,32 @@ public class Layout {
 		List<Corridor> placedCorridors = new LinkedList<>() ;
 		
 		
-		Direction[] directions = { Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST } ;
-		Direction[] opposites  = { Direction.SOUTH, Direction.WEST, Direction.NORTH, Direction.EAST } ;
-				
 		// put the first room, which we will then use as the starting anchor to place
 		// other rooms
 		
 		Room R = worklist.get(0) ;
 		layout.place(R,centerX,centerY) ;
+		placedRooms.add(R) ;
 		while (!worklist.isEmpty()) {
 		    R = worklist.remove(0) ;
+		    // Cover first the case when R is not placed yet. This can only be the case
+		    // when R forms its own "island", disconnected from other islands placed
+		    // so far.
+		    // In this case we need to find some free place to put R.
+		    if (!placedRooms.contains(R)) {
+		    	var location = layout.findASpot() ;
+		    	if (location == null) return null ;
+		    	layout.place(R,location.fst,location.snd) ;
+		    }
+		    
+		    
 		    var location0 = layout.find(R) ;
 		    int x0 = location0.fst ;
 		    int y0 = location0.snd ;
+		    
+		    // Heuristic: place all neighbors of R, when they are not placed yet.
+		    // Then place the corridors leading to them.
+		    // Then, we move them to the top of the working list.
 			for(var connection : R.connections) {
 				if (placedCorridors.contains(connection.fst)) continue ;
 				
@@ -580,11 +658,14 @@ public class Layout {
 				
 				List<Pair<Integer,Integer>> neighbors = new LinkedList<>() ;
 				if (x0+2<width)  neighbors.add(new Pair(x0+2,y0)) ;
-				if (y0+2<height) neighbors.add(new Pair(x0,y0+2)) ;
 				if (x0-2>=0)     neighbors.add(new Pair(x0-2,y0)) ;
+				if (y0+2<height) neighbors.add(new Pair(x0,y0+2)) ;
 				if (y0-2>=0)     neighbors.add(new Pair(x0,y0-2)) ;
 				
+				shuffle(neighbors) ;
+				
 				for (var nn : neighbors) {
+					if (layout.layout[nn.fst][nn.snd] != null) continue ;
 					layout.place(R2,nn.fst,nn.snd) ;
 					var route = layout.findRoute(R,R2) ;
 					if (route != null) {
@@ -623,8 +704,12 @@ public class Layout {
 		
 	}
 	
-	// quick test
-	public static void main(String[] args) {
+	
+	//=====================================
+	// few test stuffs
+	//=====================================
+	
+	static void testASCIIprint() {
 		var R0 = new Room(0) ;
 		var R1 = new Room(1) ;
 		var R2 = new Room(2) ;
@@ -651,6 +736,51 @@ public class Layout {
 		
 	     System.out.println("") ;
 	     System.out.println(layout.toString()) ;
+	}
+	
+	static void testAutoLayout_1() {
+		 List<Room> rooms = Room.randomGen(6,1,1,false) ;
+		 for(var R : rooms) {
+				System.out.println("======") ;
+				System.out.println(R.toString()) ;
+			}
+		 
+		 Layout layout = drawLayout(rooms) ;
+		 System.out.println("") ;
+	     System.out.println(layout.toString()) ;
+	}
+	
+	static void testAutoLayout_2() {
+		 List<Room> rooms = Room.randomGen(5,2,1,false) ;
+		 for(var R : rooms) {
+				System.out.println("======") ;
+				System.out.println(R.toString()) ;
+			}
+		 
+		 Layout layout = drawLayout(rooms) ;
+		 System.out.println("") ;
+	     System.out.println(layout.toString()) ;
+	}
+	
+	static void testAutoLayout_3() {
+		 List<Room> rooms = Room.randomGen(6,3,1,false) ;
+		 for(var R : rooms) {
+				System.out.println("======") ;
+				System.out.println(R.toString()) ;
+			}
+		 
+		 Layout layout = drawLayout(rooms) ;
+		 System.out.println("") ;
+	     System.out.println(layout.toString()) ;
+	}
+	
+	// quick test
+	public static void main(String[] args) {
+		//testASCIIprint() ;
+		// testAutoLayout_1() ;
+		// testAutoLayout_2() ;
+		testAutoLayout_3() ;
+
 	}
 
 }

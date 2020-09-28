@@ -148,6 +148,8 @@ public class Room extends WalledStructure {
 			if (R.connections.isEmpty()) {
 				// case-1 : R has no connection yet:
 				newConnetions =  1 + rnd.nextInt(maxOutDegree) ;
+				//newConnetions =  maxOutDegree ;
+				
 			}
 			else {
 				// case-2: R already has some connections:

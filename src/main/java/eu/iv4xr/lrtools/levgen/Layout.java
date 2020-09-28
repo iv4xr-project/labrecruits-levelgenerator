@@ -1,8 +1,10 @@
 package eu.iv4xr.lrtools.levgen;
 
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import eu.iv4xr.lrtools.levgen.Room.Direction;
@@ -22,6 +24,11 @@ public class Layout {
 	class LayoutItem {
 		WalledStructure structure ;
 		Bending bending = null ;
+		/**
+		 * Only when this layout-item is a corridor, then this would be a door to be placed
+		 * in this segment of the corridor, guarding the corridor.
+		 */
+		Door door = null ;
 		LayoutItem(WalledStructure s) {
 			structure = s ;
 		}
@@ -91,7 +98,7 @@ public class Layout {
 		return this ;
 	}
 	
-	Pair<Integer,Integer> find(WalledStructure struct) {
+	Pair<Integer,Integer> find(Room struct) {
 		for (int w=0; w<width; w++) {
 			for (int h=0; h<height; h++) {
 				if (layout[w][h] == null) continue ;
@@ -100,8 +107,25 @@ public class Layout {
 		}
 		return null ;
 	}
+	
+	/**
+	 * Find all segments of a corridor.
+	 */
+	List<Pair<Integer,Integer>> findAllSegments(Corridor cor) {
+		List<Pair<Integer,Integer>> segments = new LinkedList<>() ;
+		for (int x=0;x<width; x++) {
+			for(int y=0; y<height; y++) {
+				var E = layout[x][y] ;
+				if (E==null) continue ;
+				if (E.structure == cor) {
+					segments.add(new Pair(x,y)) ;
+				}
+			}
+		}
+		return segments ;
+	}
 	 
-	public Layout place(WalledStructure anchor, WalledStructure structure, Bending bending, Direction ... dirs) {
+	public Layout place(Room anchor, WalledStructure structure, Bending bending, Direction ... dirs) {
 		var anchor_ = find(anchor) ;
 		if (anchor_ == null) throw new IllegalArgumentException() ;
 		int x = anchor_.fst ;
@@ -122,12 +146,13 @@ public class Layout {
 	 * Place a room in a certain position relative to the given anchor. The relative position is
 	 * given in terms of a series of directions (e.g. EAST EAST NORTH).
 	 */
-	public Layout place(WalledStructure anchor, Room room, Direction ... dirs) {
+	public Layout place(Room anchor, Room room, Direction ... dirs) {
 		return place(anchor,room,null,dirs) ;
 	}
 	
 	char emptySpaceCode = ' ' ;
 	char corridorCode = 'o' ;
+	char doorCode = '/' ;
 	char wallCode = '#' ;
 	
 	char[][] asciiDraw(LayoutItem S) {
@@ -165,24 +190,43 @@ public class Layout {
 		int centerY = scale/2 ;
 		switch(S.bending) {
 		   case WEST_EAST :
-			   for(int x=0; x<scale;x++) map[x][centerY] = corridorCode ; break ;
+			   for(int x=0; x<scale;x++) {
+				   if(x==0 && S.door!=null) map[x][centerY] = doorCode ;
+				   else map[x][centerY] = corridorCode ; 
+			   }
+			   break ;
 		   case NORTH_SOUTH :
-			   for(int y=0; y<scale;y++)  map[centerX][y] = corridorCode ; break ;
+			   for(int y=0; y<scale;y++)  { 
+				   if(y==0 && S.door!=null) map[centerX][y] = doorCode ;
+				   else map[centerX][y] = corridorCode ; }
+			   break ;
 		   case NORTH_AND_EAST :
-			   for(int y=centerY; y<scale; y++)  map[centerX][y] = corridorCode ;
+			   for(int y=centerY; y<scale; y++)  {
+				   if(y==centerY && S.door!=null) map[centerX][y] = doorCode ;
+				   else map[centerX][y] = corridorCode ;
+			   }
 			   for(int x=centerX; x<scale; x++)  map[x][centerY] = corridorCode ;
 			   break ;
 		   case NORTH_AND_WEST :
-			   for(int y=centerY; y<scale; y++)  map[centerX][y] = corridorCode ;
+			   for(int y=centerY; y<scale; y++)  {
+				   if(y==centerY && S.door!=null) map[centerX][y] = doorCode ;
+				   else map[centerX][y] = corridorCode ;
+			   }
 			   for(int x=0; x<=centerX; x++)  map[x][centerY] = corridorCode ;
 			   break ;   
 		   case SOUTH_AND_EAST :
-			   for(int y=0; y<=centerY; y++)  map[centerX][y] = corridorCode ;
+			   for(int y=0; y<=centerY; y++)  { 
+				   if(y==0 && S.door!=null) map[centerX][y] = doorCode ;
+				   else map[centerX][y] = corridorCode ;
+			   }
 			   for(int x=centerX; x<scale; x++)  map[x][centerY] = corridorCode ;
 			   break ;  
 		   case SOUTH_AND_WEST :
 			   for(int y=0; y<=centerY; y++)  map[centerX][y] = corridorCode ;
-			   for(int x=0; x<=centerX; x++)  map[x][centerY] = corridorCode ;
+			   for(int x=0; x<=centerX; x++)  {
+				   if(x==0 && S.door!=null) map[x][centerY] = doorCode ;
+				   else map[x][centerY] = corridorCode ;
+			   }
 			   break ;    
 		}
 		return map ;
@@ -577,12 +621,37 @@ public class Layout {
 	private Pair<Integer,Integer> findASpot() {
 		var bl = bottomleft() ;
 		var tr = topright() ;
+		// try either right or left of the occupied rectangle
 		int x = tr.fst + 3 ;
-		int h = tr.snd - bl.snd ;
-		int y = bl.snd + h/2 ;
-		return new Pair(x,y) ;
+		if (x>=width) x = bl.fst - 3 ;
+		if (x>=0) {
+			// so ...the chosen is within the map
+			int h = tr.snd - bl.snd ;
+			int y = bl.snd + h/2 ;
+			return new Pair(x,y) ;
+		}
+		// the chosen x is negative...
+		// try above or below the occupied triangle:
+		int w = tr.fst - bl.fst ;
+		x = bl.fst + w/2 ;
+		int y = tr.snd + 3 ;
+		if (y>=width) y = bl.snd - 3 ;
+		if (y>=0) {
+			return new Pair(x,y) ;
+		}
+		// uhm... can't find a location. Can be improved of course.. For now just give up:
+		return null ;
 	}
 	
+	
+	public static Layout drawLayoutWithRetries(List<Room> rooms) {
+		int maxNumberOfRetries = 10 ;
+		for (int k=0; k<maxNumberOfRetries; k++) {
+			Layout layout = drawLayout(rooms) ;
+			if (layout != null) return layout ;
+		}
+		return null ;
+	}
 	
 	public static Layout drawLayout(List<Room> rooms) {
 			
@@ -699,8 +768,33 @@ public class Layout {
 			doneRooms.add(R) ;
 			worklist = worklist.stream().filter(Z -> ! doneRooms.contains(Z)).collect(Collectors.toList()) ;
 		}
-				
-		return layout.clip() ;
+		
+		// minimize the layout:
+		Layout result = layout.clip() ;
+		// now place the doors:
+		Set<Corridor> allCorridors = new HashSet<>() ;
+		for(Room Q : rooms) {
+			allCorridors.addAll(Q.connections.stream().map(C -> C.fst).collect(Collectors.toList())) ;
+		}
+		for(Corridor cor : allCorridors) {
+			List<Pair<Integer,Integer>> segments = new LinkedList<>() ;
+			segments.addAll(result.findAllSegments(cor)) ;
+			// we'll just arrange the doors linearly over the segments:
+			if (cor.doors.size() > segments.size()) {
+				System.err.println("### currently I can't place " 
+			            + cor.doors.size() 
+			            + " doors in a corridor of "
+						+ segments.size() + " cells long.") ;
+				return null ;
+			}
+			int k=0 ;
+			for(Door d : cor.doors) {
+				var position = segments.get(k) ;
+				result.layout[position.fst][position.snd].door = d ;
+				k++ ;
+			}
+		}
+		return result ;
 		
 	}
 	
@@ -739,7 +833,7 @@ public class Layout {
 	}
 	
 	static void testAutoLayout_1() {
-		 List<Room> rooms = Room.randomGen(6,1,1,false) ;
+		 List<Room> rooms = Room.randomGen(6,1,1,1,false) ;
 		 for(var R : rooms) {
 				System.out.println("======") ;
 				System.out.println(R.toString()) ;
@@ -751,7 +845,7 @@ public class Layout {
 	}
 	
 	static void testAutoLayout_2() {
-		 List<Room> rooms = Room.randomGen(5,2,1,false) ;
+		 List<Room> rooms = Room.randomGen(5,2,1,1,false) ;
 		 for(var R : rooms) {
 				System.out.println("======") ;
 				System.out.println(R.toString()) ;
@@ -763,13 +857,13 @@ public class Layout {
 	}
 	
 	static void testAutoLayout_3() {
-		 List<Room> rooms = Room.randomGen(6,3,1,false) ;
+		 List<Room> rooms = Room.randomGen(6,3,1,1,false) ;
 		 for(var R : rooms) {
 				System.out.println("======") ;
 				System.out.println(R.toString()) ;
 			}
 		 
-		 Layout layout = drawLayout(rooms) ;
+		 Layout layout = drawLayoutWithRetries(rooms) ;
 		 System.out.println("") ;
 	     System.out.println(layout.toString()) ;
 	}

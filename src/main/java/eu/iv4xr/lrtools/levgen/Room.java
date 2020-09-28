@@ -12,6 +12,7 @@ public class Room extends WalledStructure {
 	int ID ;
 	List<Pair<Corridor,Direction>> connections  = new LinkedList<>() ;
 	List<Button> buttons = new LinkedList<>() ;
+	Agent agent = null ;
 	
 	public Room(int id) { ID = id ; }
 	
@@ -114,11 +115,14 @@ public class Room extends WalledStructure {
 	public static List<Room> randomGen(int numberOfRooms, 
 			int maxOutDegree, 
 			int maxButtonsPerRoom,
+			int maxDoorsPerCorridor,
 			boolean allowSelfLoop) {
 		if (maxOutDegree > 3)
 			throw new UnsupportedOperationException("Branching degree cannot exceed 3.") ;
 		if (maxButtonsPerRoom > 5)
 			throw new UnsupportedOperationException("#buttons per room cannot exceed 5.") ;
+		if (maxDoorsPerCorridor>3)
+			throw new UnsupportedOperationException("#doors per corridor cannot exceed 3.") ;
 		if (allowSelfLoop)
 			throw new UnsupportedOperationException("Corridor connecting a room to itself is disabled.") ;
 		
@@ -128,6 +132,9 @@ public class Room extends WalledStructure {
 		for (int r=0; r<numberOfRooms; r++)  {
 			rooms.add(new Room(r)) ;
 		}
+		
+		// just adding agent Smith to room-0:
+		rooms.get(0).agent = new Agent("Smith") ;
 		
 		
 		List<Room> done = new LinkedList<>() ;
@@ -175,6 +182,12 @@ public class Room extends WalledStructure {
 				Room R2 = candidates.get(rnd.nextInt(candidates.size())) ;
 				Corridor.connect(R,R2) ;
 				candidates.remove(R2) ;
+				var cor = R.getConnection(R2).fst ;
+				int numOfDoors = rnd.nextInt(maxDoorsPerCorridor+1) ;
+				for (int d=0;d<numOfDoors;d++) {
+					var door = new Door("d_" + R.ID + "_" + R2.ID + "_" + d) ;
+					cor.doors.add(door) ;
+				}
 			}
 			done.add(R) ;
 		}
@@ -182,7 +195,7 @@ public class Room extends WalledStructure {
 	}
 	
 	public static void main(String[] args) {
-		List<Room> rooms = randomGen(4,3,1,false) ;
+		List<Room> rooms = randomGen(4,3,1,1,false) ;
 		for(var R : rooms) {
 			System.out.println("======") ;
 			System.out.println(R.toString()) ;

@@ -16,6 +16,19 @@ public class Room extends WalledStructure {
 	
 	public Room(int id) { ID = id ; }
 	
+	public Button addButton(Button B) {
+		buttons.add(B) ; return B ;
+	}
+	
+	public Button addButton(String buttonId) {
+		return addButton(new Button(buttonId)) ;
+	}
+	
+	public Agent placeAgent(String agentId) {
+		agent = new Agent(agentId) ;
+		return agent ;
+	}
+	
 	/**
 	 * Get the connection to the given room R.
 	 */
@@ -104,6 +117,24 @@ public class Room extends WalledStructure {
 		return s ;
 	}
 	
+	/**
+	 * Return all buttons collected from a set of rooms.
+	 */
+	public static List<Button> collectButtons(List<Room> rooms) {
+		List<Button> buttons = new LinkedList<>() ;
+		for(var R : rooms) {
+			buttons.addAll(R.buttons) ;
+		}
+		return buttons ;
+	}
+	
+	public static List<Button> collectButtons(Room[] rooms) {
+	    List<Room> rooms_ = new LinkedList<>() ;
+	    for(int i=0; i<rooms.length; i++) {
+	    	rooms_.add(rooms[i]) ;
+	    }
+	    return collectButtons(rooms_) ;
+	}
 	/**
 	 * Randomly generating a network of rooms. 
 	 * @param numberOfRooms

@@ -372,30 +372,29 @@ public class RendererToLRLevelDef {
 		return buf ;
 	}
     
-    public String renderLayout(Layout layout) {
+    public String renderLayout(List<Button> buttons, Layout layout) {
     	StringBuffer buf = new StringBuffer() ;
-    	// placing an agent... assuming it to be in the first room:
-    	for(int x=0; x<layout.width; x++) {
-    		for(int y=0; y<layout.height; y++) {
-    			var Z = layout.layout[x][y] ;
-    			if(Z != null && Z.structure instanceof Room) {
-    				Room R = (Room) Z.structure ;
-    				if (R.ID == 0) {
-    					
-    				}
+    	// placing the buttons logic:
+    	for(var B : buttons) {
+    		if (B.associatedDoors.size()>0) {
+    			buf.append(B.ID) ;
+    			for(var D : B.associatedDoors) {
+    				buf.append(csvSeparator) ;
+    				buf.append(D.ID) ;
     			}
+    			buf.append("\n") ;
     		}
     	}
-    	
+    	// generating three layers from the given layout, one for each elevation 1,2,3
     	buf = renderLayout(buf,layout,0) ; buf.append("\n") ;
     	buf = renderLayout(buf,layout,1) ; buf.append("\n") ;
     	buf = renderLayout(buf,layout,2) ; buf.append("\n") ;
     	return buf.toString() ;
     }
     
-    public void saveAsLRLevelDef(String fname, Layout layout) throws IOException {
+    public void saveAsLRLevelDef(String fname, List<Button> buttons, Layout layout) throws IOException {
     	BufferedWriter writer = new BufferedWriter(new FileWriter(fname));
-        writer.write(renderLayout(layout));
+        writer.write(renderLayout(buttons,layout));
         writer.close();
     }
 	
@@ -420,7 +419,7 @@ public class RendererToLRLevelDef {
 	     var S0 = layout.findAllSegments(cor).get(0) ;
 	     var tb2 = renderer.renderCorridor(layout.layout[S0.fst][S0.snd],0) ;
 	     //System.out.println("" + renderer.renderLayout(layout)) ;
-	     renderer.saveAsLRLevelDef("mylevel.csv",layout);
+	     renderer.saveAsLRLevelDef("mylevel.csv",new LinkedList<Button>(),layout);
 	     
 	}
 	

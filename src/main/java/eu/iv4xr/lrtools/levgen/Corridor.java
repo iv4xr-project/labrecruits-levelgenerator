@@ -12,12 +12,21 @@ public class Corridor extends WalledStructure {
 	// doors guarding the corridor
 	public List<Door> doors = new LinkedList<>() ;
 	
+	public Door guard(Door d) {
+		doors.add(d) ;
+		return d ;
+	}
+	
+	public Door guard(String doorId) {
+		return guard(new Door(doorId)) ;
+	}
+	
 	public static Corridor connect(Room src, Room dest) {
 		var c = new Corridor() ;
 		c.from = src ; c.to = dest ;
 		src.connections.add(new Pair(c,Direction.UNKNOWN)) ;
 		dest.connections.add(new Pair(c,Direction.UNKNOWN)) ;
-		return null ;
+		return c ;
 	}
 
 }

@@ -10,7 +10,8 @@ import java.util.stream.Collectors;
 import eu.iv4xr.lrtools.levgen.Room.Direction;
 
 /**
- * A layout is a 2-dimensional array representing a flat rectangle world made of tiles.
+ * A layout is essentially a 2D, tiled, plannar graph over rooms. More precisely, it
+ * is a 2-dimensional array representing a flat rectangle world made of tiles.
  * It represents a coarse grained map of how rooms are placed, and connected by corridors. 
  * Each room has the size of one tile.
  * 
@@ -651,6 +652,12 @@ public class Layout {
 			if (layout != null) return layout ;
 		}
 		return null ;
+	}
+	
+	public static Layout drawLayoutWithRetries(Room ...rooms) {
+		List<Room> rooms_ = new LinkedList<>() ;
+		for (int i=0; i<rooms.length; i++)  rooms_.add(rooms[i]) ;
+		return drawLayoutWithRetries(rooms_) ;
 	}
 	
 	public static Layout drawLayout(List<Room> rooms) {
